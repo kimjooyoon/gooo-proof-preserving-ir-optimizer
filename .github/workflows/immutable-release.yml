@@ -46,7 +46,8 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          test "$(git rev-parse "$EXPECTED_SHA^{commit}")" = "$EXPECTED_SHA"
+          git merge-base --is-ancestor "$EXPECTED_SHA" HEAD
           test "$(go env GOVERSION)" = "go1.27.0"
           case "$SOURCE_RUN_ID" in
             ''|*[!0-9]*) echo 'source_run_id must be an integer' >&2; exit 1 ;;

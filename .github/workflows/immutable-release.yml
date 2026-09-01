@@ -102,7 +102,7 @@ jobs:
             --slurpfile contract contracts/release-reuse-v1.json \
             --slurpfile ci "$EVIDENCE_ROOT/ci-evidence.json" \
             '{schema:$schema,source_run_id:$source_run_id,proof_artifacts:{evidence:{id:$evidence_artifact_id,name:$evidence_artifact_name,digest:$evidence_artifact_digest},manifest:{id:$manifest_artifact_id,name:$manifest_artifact_name,digest:$manifest_artifact_digest}},toolchain_digest:$toolchain_digest,contract_digest:$contract_digest,source_digest:$source_digest,ci_evidence_digest:$ci_evidence_digest,fixed_vector:$ci[0].fixed_vector,generated:$ci[0].generated,tests:{executed:0,reused:2},conformance:{executed:0,reused:1},integration:{executed:0,reused:1},expensive_executions:{before:$contract[0].duplicate_release_baseline.expensive_executions,after:$contract[0].duplicate_release_target.expensive_executions,decision:$contract[0].duplicate_release_target.decision,reason:$contract[0].duplicate_release_target.reason},physical_runner_comparison:$contract[0].physical_runner_comparison}' \
-            "$EVIDENCE_ROOT/release-reuse.json"
+            > "$EVIDENCE_ROOT/release-reuse.json"
 
       - name: Create one annotated tag for the exact merge
         shell: bash

@@ -12,7 +12,7 @@ name: Immutable proof-preserving IR optimizer release
         required: true
         type: string
       release_version:
-        description: New unused 0.x.y version; failed versions are never reused
+        description: New 0.x.y version, or an exact annotated tag left by an aborted run
         required: true
         default: 0.1.1
         type: string
@@ -58,13 +58,20 @@ jobs:
           RELEASE_TAG="v$RELEASE_VERSION"
           echo "RELEASE_TAG=$RELEASE_TAG" >> "$GITHUB_ENV"
           echo "EVIDENCE_ROOT=$RUNNER_TEMP/gooo-proof-preserving-ir-optimizer-release" >> "$GITHUB_ENV"
-          if git ls-remote --exit-code --tags origin "refs/tags/$RELEASE_TAG" >/dev/null 2>&1; then
-            echo "refusing to reuse existing tag $RELEASE_TAG" >&2
-            exit 1
-          fi
           if gh api "repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG" >/dev/null 2>&1; then
             echo "refusing to reuse existing release $RELEASE_TAG" >&2
             exit 1
+          fi
+          if git ls-remote --exit-code --tags origin "refs/tags/$RELEASE_TAG" >/dev/null 2>&1; then
+            tag_ref=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$RELEASE_TAG")
+            test "$(jq -r '.object.type' <<<"$tag_ref")" = tag
+            existing_tag_object=$(jq -r '.object.sha' <<<"$tag_ref")
+            tag_body=$(gh api "repos/$GITHUB_REPOSITORY/git/tags/$existing_tag_object")
+            jq -e --arg expected "$EXPECTED_SHA" '.object.type == "commit" and .object.sha == $expected' <<<"$tag_body" >/dev/null
+            echo "EXISTING_TAG=true" >> "$GITHUB_ENV"
+            echo "TAG_OBJECT_SHA=$existing_tag_object" >> "$GITHUB_ENV"
+          else
+            echo "EXISTING_TAG=false" >> "$GITHUB_ENV"
           fi
 
       - name: Verify and reuse the successful post-main proof artifact
@@ -100,6 +107,10 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
+          if [[ "${EXISTING_TAG:-false}" == true ]]; then
+            echo "verified existing annotated tag $RELEASE_TAG for $EXPECTED_SHA"
+            exit 0
+          fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git tag -a "$RELEASE_TAG" "$EXPECTED_SHA" -m "gooo-proof-preserving-ir-optimizer $RELEASE_TAG"
@@ -121,7 +132,7 @@ jobs:
           evidence_asset="gooo-proof-preserving-ir-optimizer-evidence-$RELEASE_TAG.tar.gz"
           report_asset="gooo-proof-preserving-ir-optimizer-report-$RELEASE_TAG.json"
           git archive --format=tar.gz --prefix="gooo-proof-preserving-ir-optimizer-$RELEASE_TAG/" "$EXPECTED_SHA" > "$release_dir/$source_asset"
-          tar -czf "$release_dir/$evidence_asset" -C "$EVIDENCE_ROOT" conformance integration-output ci-evidence.json reused-proof.json release-reuse.json
+          tar -czf "$release_dir/$evidence_asset" -C "$EVIDENCE_ROOT/proof" conformance integration-output ci-evidence.json -C "$EVIDENCE_ROOT" reused-proof.json release-reuse.json
           jq -S -n --arg schema "gooo-proof-preserving-ir-optimizer/release-report/v1" --arg version "$RELEASE_VERSION" --arg tag "$RELEASE_TAG" --arg commit "$EXPECTED_SHA" --arg tag_object "$TAG_OBJECT_SHA" --slurpfile conformance "$EVIDENCE_ROOT/conformance.json" --slurpfile metrics "$EVIDENCE_ROOT/ci-evidence.json" --slurpfile reuse "$EVIDENCE_ROOT/release-reuse.json" '{schema:$schema,version:$version,tag:$tag,merge_sha:$commit,annotated_tag_object_sha:$tag_object,immutable_required:true,fixed_vector:$conformance[0].summary,exact_metrics:$metrics[0],release_reuse:$reuse[0]}' > "$release_dir/$report_asset"
           source_digest="sha256:$(sha256sum "$release_dir/$source_asset" | awk '{print $1}')"
           evidence_digest="sha256:$(sha256sum "$release_dir/$evidence_asset" | awk '{print $1}')"

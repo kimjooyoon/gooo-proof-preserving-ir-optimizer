@@ -162,7 +162,7 @@ func runCase(contract Contract, rawMeta []byte, scenario Scenario, program Progr
 		return CaseReport{}, err
 	}
 
-	caseDir := filepath.Join(out, "cases", scenario.ID)
+	caseDir := filepath.Join(out, scenario.ID)
 	before, err := buildAndRun(caseDir, "before", baseExpr, generatedMetadataFor(baseExpr, nil))
 	if err != nil {
 		return CaseReport{}, fmt.Errorf("baseline generated program: %w", err)

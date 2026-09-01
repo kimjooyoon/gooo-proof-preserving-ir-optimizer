@@ -133,7 +133,14 @@ jobs:
           evidence_asset="gooo-proof-preserving-ir-optimizer-evidence-$RELEASE_TAG.tar.gz"
           report_asset="gooo-proof-preserving-ir-optimizer-report-$RELEASE_TAG.json"
           git archive --format=tar.gz --prefix="gooo-proof-preserving-ir-optimizer-$RELEASE_TAG/" "$EXPECTED_SHA" > "$release_dir/$source_asset"
-          tar -czf "$release_dir/$evidence_asset" -C "$EVIDENCE_ROOT/proof" conformance integration-output ci-evidence.json -C "$EVIDENCE_ROOT" reused-proof.json release-reuse.json
+          evidence_stage="$release_dir/evidence-stage"
+          mkdir -p "$evidence_stage"
+          cp -R "$EVIDENCE_ROOT/proof/conformance" "$evidence_stage/conformance"
+          cp -R "$EVIDENCE_ROOT/proof/integration-output" "$evidence_stage/integration-output"
+          cp "$EVIDENCE_ROOT/proof/ci-evidence.json" "$evidence_stage/ci-evidence.json"
+          cp "$EVIDENCE_ROOT/reused-proof.json" "$evidence_stage/reused-proof.json"
+          cp "$EVIDENCE_ROOT/release-reuse.json" "$evidence_stage/release-reuse.json"
+          tar -czf "$release_dir/$evidence_asset" -C "$evidence_stage" conformance integration-output ci-evidence.json reused-proof.json release-reuse.json
           jq -S -n --arg schema "gooo-proof-preserving-ir-optimizer/release-report/v1" --arg version "$RELEASE_VERSION" --arg tag "$RELEASE_TAG" --arg commit "$EXPECTED_SHA" --arg tag_object "$TAG_OBJECT_SHA" --slurpfile conformance "$EVIDENCE_ROOT/conformance.json" --slurpfile metrics "$EVIDENCE_ROOT/ci-evidence.json" --slurpfile reuse "$EVIDENCE_ROOT/release-reuse.json" '{schema:$schema,version:$version,tag:$tag,merge_sha:$commit,annotated_tag_object_sha:$tag_object,immutable_required:true,fixed_vector:$conformance[0].summary,exact_metrics:$metrics[0],release_reuse:$reuse[0]}' > "$release_dir/$report_asset"
           source_digest="sha256:$(sha256sum "$release_dir/$source_asset" | awk '{print $1}')"
           evidence_digest="sha256:$(sha256sum "$release_dir/$evidence_asset" | awk '{print $1}')"

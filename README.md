@@ -77,9 +77,11 @@ duplicated. The structural duplicate-count pair is CLOSED, while hosted-runner
 wall/RSS comparison remains UNKNOWN when physical runner identity is not
 proven.
 
-It refuses existing tags/releases, creates an annotated tag, uploads
-digest-bound draft assets, publishes once, and checks the public release API for
-`immutable=true` plus every asset digest. It has no user-token secret reference,
+It refuses existing releases and refuses any tag that is not already an exact
+annotated tag for the requested merge; an exact tag left by an aborted run is
+continued without modification. Otherwise it creates one annotated tag,
+uploads digest-bound draft assets, publishes once, and checks the public release
+API for `immutable=true` plus every asset digest. It has no user-token secret reference,
 Actions admin/capability endpoint reference, or tag/release overwrite/delete
 path. The immutable-releases setting is enabled separately through the user API
 before a release is considered closed.

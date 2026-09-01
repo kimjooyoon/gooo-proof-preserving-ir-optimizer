@@ -171,7 +171,7 @@ jobs:
               toolchain:{go_version:$go_version,digest:$toolchain_digest,runner_digest:$runner_digest},
               contract:{path:$contract_path,digest:$contract_digest},source:{path:$source_path,digest:$source_digest},
               ci_evidence_digest:$ci_evidence_digest,fixed_vector:$evidence[0].fixed_vector,generated:$evidence[0].generated}' \
-            "$EVIDENCE_ROOT/proof-manifest.json"
+            > "$EVIDENCE_ROOT/proof-manifest.json"
 
       - name: Upload proof artifact manifest
         if: success()

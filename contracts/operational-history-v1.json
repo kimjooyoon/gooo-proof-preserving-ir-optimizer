@@ -1,0 +1,37 @@
+{
+  "schema": "gooo-proof-preserving-ir-optimizer/operational-history/v1",
+  "entries": [
+    {
+      "id": "local-authoring-validation-before-pr-7",
+      "decision": "OPERATIONAL_REFUTED",
+      "reason": "LOCAL_STATIC_VALIDATION_EXECUTED_DURING_AUTHORING",
+      "scope": "AUTHORING_ONLY",
+      "recorded_at": "2026-09-01",
+      "invocations": [
+        {
+          "command": "git diff --check",
+          "execution_count": 1
+        },
+        {
+          "command": "bash -n scripts/verify-ci-proof-artifact.sh scripts/semantic-audit.sh",
+          "execution_count": 1,
+          "files_checked": 2
+        },
+        {
+          "command": "ruby -e 'require \"yaml\"; YAML.load_file(\".github/workflows/immutable-release.yml\")'",
+          "execution_count": 1,
+          "files_checked": 1
+        }
+      ],
+      "authoring_local_validation_invocation_count": 3,
+      "product_runtime_authority": {
+        "local_test_executions": 0,
+        "local_build_executions": 0,
+        "local_vet_executions": 0,
+        "local_conformance_executions": 0,
+        "local_integration_executions": 0
+      },
+      "disposition": "Do not use the local authoring checks as product evidence; use GitHub Actions only."
+    }
+  ]
+}

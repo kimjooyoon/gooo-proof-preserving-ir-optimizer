@@ -351,7 +351,7 @@ func measuredCommand(dir, binaryPath, command string, args ...string) (commandOb
 	argv := append([]string{"-f", "%M", "-o", rssPath, command}, args...)
 	cmd := exec.CommandContext(ctx, "/usr/bin/time", argv...)
 	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), "GOCACHE=off", "GOTOOLCHAIN=local")
+	cmd.Env = append(os.Environ(), "GOCACHE="+filepath.Join(dir, ".cache"), "GOTOOLCHAIN=local")
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	start := time.Now()

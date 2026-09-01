@@ -19,7 +19,7 @@ while IFS= read -r -d '' source; do
   mkdir -p "$target"
   cp "$source" "$target/main.go"
   printf 'module generated.integration.%s.%s\n\ngo 1.27.0\n' "${case_id//-/.}" "$variant" > "$target/go.mod"
-  (cd "$target" && GOCACHE=off GOTOOLCHAIN=local go build -trimpath -o program .)
+  (cd "$target" && GOCACHE="$PWD/.cache" GOTOOLCHAIN=local go build -trimpath -o program .)
   output=$("$target/program")
   jq -e '.value|type == "number"' <<<"$output" >/dev/null
   count=$((count + 1))

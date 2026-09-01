@@ -105,7 +105,7 @@ jobs:
             .verification_authority == "GITHUB_ACTIONS" and
             .repository_writes == 0 and .root_readme_excluded == true and
             ([.inventory.go_files,.inventory.gooo_files,.inventory.go_physical_lines,.inventory.gooo_physical_lines,.inventory.descendant_dirs,.inventory.regular_files,.generated.files,.generated.bytes,.generated.binary_bytes] | all(type=="number" and floor==.)) and
-            ([.stages[] | (.wall_ms|type)=="number" and (.wall_ms|floor)==. and (.peak_rss_kib|type)=="number" and (.peak_rss_kib|floor)==.] | all) and
+            (all(.stages[]; (.wall_ms|type)=="number" and (.wall_ms % 1)==0 and (.peak_rss_kib|type)=="number" and (.peak_rss_kib % 1)==0)) and
             ([.tests.total,.tests.selected,.tests.executed,.tests.reused,.tests.failed,.tests.unknown] | all(type=="number" and floor==.)) and
             .tests.selected == .tests.total and .tests.executed + .tests.failed == .tests.total and .tests.reused == 0 and .tests.unknown == 0 and
             .fixed_vector == {total_cases:8,closed:5,unknown:1,refuted:2} and

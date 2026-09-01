@@ -141,7 +141,7 @@ func GenerateGo(expr *Expr, metadata generatedMetadata) ([]byte, error) {
 	if metadata.ProvenanceAnchors == nil {
 		metadata.ProvenanceAnchors = collectAllAnchors(expr)
 	}
-	valueExpr, err := renderInt(expr, map[string]string{})
+	topLevelSetup, valueExpr, err := renderTopLevelInt(expr)
 	if err != nil {
 		return nil, err
 	}
@@ -166,7 +166,7 @@ type proofOutput struct {
 func main() {
 	effectTrace := []string{}
 	capabilityTrace := []string{}
-	value := int64(%s)
+	%svalue := int64(%s)
 	out := proofOutput{
 		Value: value,
 		TerminalReason: %q,
@@ -182,7 +182,23 @@ func main() {
 	}
 	fmt.Println(string(data))
 }
-`, "`json:\"value\"`", "`json:\"terminal_reason\"`", "`json:\"effect\"`", "`json:\"capability\"`", "`json:\"effect_trace\"`", "`json:\"capability_trace\"`", "`json:\"provenance_anchors\"`", valueExpr, metadata.TerminalReason, metadata.Effect, metadata.Capability, anchorsLiteral)), nil
+`, "`json:\"value\"`", "`json:\"terminal_reason\"`", "`json:\"effect\"`", "`json:\"capability\"`", "`json:\"effect_trace\"`", "`json:\"capability_trace\"`", "`json:\"provenance_anchors\"`", topLevelSetup, valueExpr, metadata.TerminalReason, metadata.Effect, metadata.Capability, anchorsLiteral)), nil
+}
+
+func renderTopLevelInt(expr *Expr) (string, string, error) {
+	if expr.Kind != "let" {
+		value, err := renderInt(expr, map[string]string{})
+		return "", value, err
+	}
+	value, err := renderInt(expr.ValueExpr, map[string]string{})
+	if err != nil {
+		return "", "", err
+	}
+	body, err := renderInt(expr.BodyExpr, map[string]string{expr.Name: expr.Name})
+	if err != nil {
+		return "", "", err
+	}
+	return fmt.Sprintf("%s := int64(%s)\n\t", expr.Name, value), body, nil
 }
 
 func goStringSlice(values []string) string {

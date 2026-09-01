@@ -19,10 +19,10 @@ while IFS= read -r -d '' source; do
   mkdir -p "$target"
   cp "$source" "$target/main.go"
   printf 'module generated.integration.%s.%s\n\ngo 1.27.0\n' "${case_id//-/.}" "$variant" > "$target/go.mod"
-  (cd "$target" && GOCACHE=off GOTOOLCHAIN=local go build -trimpath -o program .)
+  (cd "$target" && GOCACHE="$PWD/.cache" GOTOOLCHAIN=local go build -trimpath -o program .)
   output=$("$target/program")
   jq -e '.value|type == "number"' <<<"$output" >/dev/null
   count=$((count + 1))
-done < <(find "$cases" -type f -path '*/generated/main.go' -print0 | sort -z)
+done < <(find "$cases" -type f \( -path '*/before/generated/main.go' -o -path '*/after/generated/main.go' \) -print0 | sort -z)
 test "$count" -eq 16
 jq -n --argjson generated_cases "$count" '{schema:"gooo-proof-preserving-ir-optimizer/integration/v1",generated_cases:$generated_cases,decision:"CLOSED"}' > "$output_root/integration.json"

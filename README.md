@@ -66,9 +66,20 @@ and the [LLVM Language Reference](https://llvm.org/docs/LangRef.html).
 ## Release boundary
 
 The release workflow is manually dispatched only on `main` with an exact merge
-SHA and a never-reused `0.x.y` version. It refuses existing tags/releases,
-creates an annotated tag, uploads digest-bound draft assets, publishes once,
-and checks the public release API for `immutable=true` plus every asset digest.
-It never calls a repository admin-settings endpoint with `GITHUB_TOKEN` and has
-no tag/release overwrite or delete path. The immutable-releases setting must be
-enabled through the user API before a release is considered closed.
+SHA, a successful post-main conformance run, and a never-reused `0.x.y` version.
+The release verifies that run's repository, workflow, event, commit, attempt,
+artifact IDs/names/digests, proof manifest, toolchain, contract digest, source
+digest, fixed vector, and generated metrics through the standard
+`GITHUB_TOKEN`, then reuses the proof artifact. This makes the release-stage
+test/conformance/integration counts `0/2`, `0/1`, and `0/1` for
+executed/reused, respectively; no conformance or integration execution is
+duplicated. The structural duplicate-count pair is CLOSED, while hosted-runner
+wall/RSS comparison remains UNKNOWN when physical runner identity is not
+proven.
+
+It refuses existing tags/releases, creates an annotated tag, uploads
+digest-bound draft assets, publishes once, and checks the public release API for
+`immutable=true` plus every asset digest. It has no user-token secret reference,
+Actions admin/capability endpoint reference, or tag/release overwrite/delete
+path. The immutable-releases setting is enabled separately through the user API
+before a release is considered closed.

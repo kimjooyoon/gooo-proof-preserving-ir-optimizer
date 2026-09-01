@@ -32,6 +32,23 @@
     "failed",
     "unknown"
   ],
+  "proof_manifest_fields": [
+    "repository",
+    "workflow",
+    "workflow_file",
+    "event",
+    "head_sha",
+    "run_id",
+    "run_attempt",
+    "conclusion",
+    "artifact.id",
+    "artifact.name",
+    "artifact.digest",
+    "toolchain.go_version",
+    "toolchain.digest",
+    "contract.digest",
+    "source.digest"
+  ],
   "authority": {
     "repository_writes": 0,
     "local_test_executions": 0,

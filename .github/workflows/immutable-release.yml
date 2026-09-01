@@ -7,10 +7,14 @@ name: Immutable proof-preserving IR optimizer release
         description: Exact merged main commit to release
         required: true
         type: string
+      source_run_id:
+        description: Successful post-main conformance workflow run whose proof artifact is reused
+        required: true
+        type: string
       release_version:
         description: New unused 0.x.y version; failed versions are never reused
         required: true
-        default: 0.1.0
+        default: 0.1.1
         type: string
 
 permissions:
@@ -22,9 +26,9 @@ jobs:
     runs-on: ubuntu-24.04
     env:
       EXPECTED_SHA: ${{ inputs.expected_sha }}
+      SOURCE_RUN_ID: ${{ inputs.source_run_id }}
       RELEASE_VERSION: ${{ inputs.release_version }}
       GH_TOKEN: ${{ github.token }}
-      IMMUTABLE_RELEASES_API_TOKEN: ${{ secrets.IMMUTABLE_RELEASES_API_TOKEN }}
     steps:
       - name: Checkout exact merged commit
         uses: actions/checkout@v5
@@ -38,19 +42,19 @@ jobs:
           go-version: 1.27.0
           cache: false
 
-      - name: Bind exact merge and confirm immutable releases through user API
+      - name: Bind exact merge and reserve a never-reused release version
         shell: bash
         run: |
           set -Eeuo pipefail
           test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
           test "$(go env GOVERSION)" = "go1.27.0"
+          case "$SOURCE_RUN_ID" in
+            ''|*[!0-9]*) echo 'source_run_id must be an integer' >&2; exit 1 ;;
+          esac
           case "$RELEASE_VERSION" in
             0.*.*) ;;
             *) echo 'release_version must be 0.x.y' >&2; exit 1 ;;
           esac
-          test -n "${IMMUTABLE_RELEASES_API_TOKEN:-}"
-          immutable=$(GH_TOKEN="$IMMUTABLE_RELEASES_API_TOKEN" gh api "repos/$GITHUB_REPOSITORY/immutable-releases" --jq '.enabled')
-          test "$immutable" = true
           RELEASE_TAG="v$RELEASE_VERSION"
           echo "RELEASE_TAG=$RELEASE_TAG" >> "$GITHUB_ENV"
           echo "EVIDENCE_ROOT=$RUNNER_TEMP/gooo-proof-preserving-ir-optimizer-release" >> "$GITHUB_ENV"
@@ -63,21 +67,34 @@ jobs:
             exit 1
           fi
 
-      - name: Re-run semantic audit and exact CI evidence
+      - name: Verify and reuse the successful post-main proof artifact
         shell: bash
         run: |
           set -Eeuo pipefail
-          mkdir -p "$EVIDENCE_ROOT/bin" "$EVIDENCE_ROOT/logs"
           ./scripts/semantic-audit.sh
-          test -z "$(gofmt -l $(git ls-files '*.go'))"
-          ./scripts/measure-command.sh "$EVIDENCE_ROOT/compile.json" compile "$EVIDENCE_ROOT/logs/compile.log" go test -run '^$' ./...
-          ./scripts/measure-command.sh "$EVIDENCE_ROOT/build.json" build "$EVIDENCE_ROOT/logs/build.log" go build -trimpath -o "$EVIDENCE_ROOT/bin/gooo-proof-preserving-ir-optimizer" ./cmd/gooo-proof-preserving-ir-optimizer
-          go vet ./...
-          ./scripts/measure-command.sh "$EVIDENCE_ROOT/test.json" test "$EVIDENCE_ROOT/test.jsonl" go test -json -count=1 ./...
-          ./scripts/measure-command.sh "$EVIDENCE_ROOT/conformance-stage.json" conformance "$EVIDENCE_ROOT/logs/conformance.log" ./scripts/conformance.sh "$GITHUB_WORKSPACE" "$EVIDENCE_ROOT/bin/gooo-proof-preserving-ir-optimizer" "$EVIDENCE_ROOT/conformance"
-          ./scripts/measure-command.sh "$EVIDENCE_ROOT/integration.json" integration "$EVIDENCE_ROOT/logs/integration.log" ./scripts/integration.sh "$EVIDENCE_ROOT/conformance/cases" "$EVIDENCE_ROOT/integration-output"
-          ./scripts/ci-metrics.sh "$GITHUB_WORKSPACE" "$EVIDENCE_ROOT/ci-evidence.json" "$EVIDENCE_ROOT/conformance/cases/conformance.json" "$EVIDENCE_ROOT/compile.json" "$EVIDENCE_ROOT/build.json" "$EVIDENCE_ROOT/test.json" "$EVIDENCE_ROOT/test.jsonl" "$EVIDENCE_ROOT/conformance-stage.json" "$EVIDENCE_ROOT/integration.json"
-          jq -e '.fixed_vector == {total_cases:8,closed:5,unknown:1,refuted:2} and .repository_writes == 0 and ([.exact_pair_vectors[] | .improvement.exact_pair] | all)' "$EVIDENCE_ROOT/ci-evidence.json" >/dev/null
+          ./scripts/verify-ci-proof-artifact.sh "$GITHUB_REPOSITORY" "$SOURCE_RUN_ID" "$EXPECTED_SHA" "$EVIDENCE_ROOT"
+          cp "$EVIDENCE_ROOT/proof/ci-evidence.json" "$EVIDENCE_ROOT/ci-evidence.json"
+          cp "$EVIDENCE_ROOT/proof/conformance/cases/conformance.json" "$EVIDENCE_ROOT/conformance.json"
+          jq -e --slurpfile contract contracts/release-reuse-v1.json '
+            .fixed_vector == $contract[0].fixed_vector and .generated == $contract[0].generated
+          ' "$EVIDENCE_ROOT/ci-evidence.json" >/dev/null
+          jq -S -n \
+            --arg schema "gooo-proof-preserving-ir-optimizer/release-reuse/v1" \
+            --argjson source_run_id "$SOURCE_RUN_ID" \
+            --argjson evidence_artifact_id "$(jq -r '.evidence_artifact.id' "$EVIDENCE_ROOT/reused-proof.json")" \
+            --arg evidence_artifact_name "$(jq -r '.evidence_artifact.name' "$EVIDENCE_ROOT/reused-proof.json")" \
+            --arg evidence_artifact_digest "$(jq -r '.evidence_artifact.digest' "$EVIDENCE_ROOT/reused-proof.json")" \
+            --argjson manifest_artifact_id "$(jq -r '.manifest_artifact.id' "$EVIDENCE_ROOT/reused-proof.json")" \
+            --arg manifest_artifact_name "$(jq -r '.manifest_artifact.name' "$EVIDENCE_ROOT/reused-proof.json")" \
+            --arg manifest_artifact_digest "$(jq -r '.manifest_artifact.digest' "$EVIDENCE_ROOT/reused-proof.json")" \
+            --arg toolchain_digest "$(jq -r '.toolchain_digest' "$EVIDENCE_ROOT/reused-proof.json")" \
+            --arg contract_digest "$(jq -r '.contract_digest' "$EVIDENCE_ROOT/reused-proof.json")" \
+            --arg source_digest "$(jq -r '.source_digest' "$EVIDENCE_ROOT/reused-proof.json")" \
+            --arg ci_evidence_digest "$(jq -r '.ci_evidence_digest' "$EVIDENCE_ROOT/reused-proof.json")" \
+            --slurpfile contract contracts/release-reuse-v1.json \
+            --slurpfile ci "$EVIDENCE_ROOT/ci-evidence.json" \
+            '{schema:$schema,source_run_id:$source_run_id,proof_artifacts:{evidence:{id:$evidence_artifact_id,name:$evidence_artifact_name,digest:$evidence_artifact_digest},manifest:{id:$manifest_artifact_id,name:$manifest_artifact_name,digest:$manifest_artifact_digest}},toolchain_digest:$toolchain_digest,contract_digest:$contract_digest,source_digest:$source_digest,ci_evidence_digest:$ci_evidence_digest,fixed_vector:$ci[0].fixed_vector,generated:$ci[0].generated,tests:{executed:0,reused:2},conformance:{executed:0,reused:1},integration:{executed:0,reused:1},expensive_executions:{before:$contract[0].duplicate_release_baseline.expensive_executions,after:$contract[0].duplicate_release_target.expensive_executions,decision:$contract[0].duplicate_release_target.decision,reason:$contract[0].duplicate_release_target.reason},physical_runner_comparison:$contract[0].physical_runner_comparison}' \
+            "$EVIDENCE_ROOT/release-reuse.json"
 
       - name: Create one annotated tag for the exact merge
         shell: bash
@@ -104,13 +121,13 @@ jobs:
           evidence_asset="gooo-proof-preserving-ir-optimizer-evidence-$RELEASE_TAG.tar.gz"
           report_asset="gooo-proof-preserving-ir-optimizer-report-$RELEASE_TAG.json"
           git archive --format=tar.gz --prefix="gooo-proof-preserving-ir-optimizer-$RELEASE_TAG/" "$EXPECTED_SHA" > "$release_dir/$source_asset"
-          tar -czf "$release_dir/$evidence_asset" -C "$EVIDENCE_ROOT" conformance integration-output ci-evidence.json
-          jq -S -n --arg schema "gooo-proof-preserving-ir-optimizer/release-report/v1" --arg version "$RELEASE_VERSION" --arg tag "$RELEASE_TAG" --arg commit "$EXPECTED_SHA" --arg tag_object "$TAG_OBJECT_SHA" --slurpfile conformance "$EVIDENCE_ROOT/conformance/cases/conformance.json" --slurpfile metrics "$EVIDENCE_ROOT/ci-evidence.json" '{schema:$schema,version:$version,tag:$tag,merge_sha:$commit,annotated_tag_object_sha:$tag_object,immutable_required:true,fixed_vector:$conformance[0].summary,exact_metrics:$metrics[0]}' > "$release_dir/$report_asset"
+          tar -czf "$release_dir/$evidence_asset" -C "$EVIDENCE_ROOT" conformance integration-output ci-evidence.json reused-proof.json release-reuse.json
+          jq -S -n --arg schema "gooo-proof-preserving-ir-optimizer/release-report/v1" --arg version "$RELEASE_VERSION" --arg tag "$RELEASE_TAG" --arg commit "$EXPECTED_SHA" --arg tag_object "$TAG_OBJECT_SHA" --slurpfile conformance "$EVIDENCE_ROOT/conformance.json" --slurpfile metrics "$EVIDENCE_ROOT/ci-evidence.json" --slurpfile reuse "$EVIDENCE_ROOT/release-reuse.json" '{schema:$schema,version:$version,tag:$tag,merge_sha:$commit,annotated_tag_object_sha:$tag_object,immutable_required:true,fixed_vector:$conformance[0].summary,exact_metrics:$metrics[0],release_reuse:$reuse[0]}' > "$release_dir/$report_asset"
           source_digest="sha256:$(sha256sum "$release_dir/$source_asset" | awk '{print $1}')"
           evidence_digest="sha256:$(sha256sum "$release_dir/$evidence_asset" | awk '{print $1}')"
           report_digest="sha256:$(sha256sum "$release_dir/$report_asset" | awk '{print $1}')"
           manifest="$release_dir/release-manifest.json"
-          jq -S -n --arg schema "gooo-proof-preserving-ir-optimizer/release-manifest/v1" --arg version "$RELEASE_VERSION" --arg tag "$RELEASE_TAG" --arg commit "$EXPECTED_SHA" --arg tag_object "$TAG_OBJECT_SHA" --arg source_name "$source_asset" --arg source_digest "$source_digest" --arg evidence_name "$evidence_asset" --arg evidence_digest "$evidence_digest" --arg report_name "$report_asset" --arg report_digest "$report_digest" --slurpfile metrics "$EVIDENCE_ROOT/ci-evidence.json" '{schema:$schema,version:$version,tag:$tag,merge_sha:$commit,annotated_tag_object_sha:$tag_object,immutable:true,assets:[{name:$source_name,digest:$source_digest},{name:$evidence_name,digest:$evidence_digest},{name:$report_name,digest:$report_digest}],fixed_vector:$metrics[0].fixed_vector,authority:{repository_writes:0,automatic_commit:0,automatic_push:0,automatic_merge:0,automatic_release:0}}' > "$manifest"
+          jq -S -n --arg schema "gooo-proof-preserving-ir-optimizer/release-manifest/v1" --arg version "$RELEASE_VERSION" --arg tag "$RELEASE_TAG" --arg commit "$EXPECTED_SHA" --arg tag_object "$TAG_OBJECT_SHA" --arg source_name "$source_asset" --arg source_digest "$source_digest" --arg evidence_name "$evidence_asset" --arg evidence_digest "$evidence_digest" --arg report_name "$report_asset" --arg report_digest "$report_digest" --slurpfile metrics "$EVIDENCE_ROOT/ci-evidence.json" --slurpfile reuse "$EVIDENCE_ROOT/release-reuse.json" '{schema:$schema,version:$version,tag:$tag,merge_sha:$commit,annotated_tag_object_sha:$tag_object,immutable:true,assets:[{name:$source_name,digest:$source_digest},{name:$evidence_name,digest:$evidence_digest},{name:$report_name,digest:$report_digest}],fixed_vector:$metrics[0].fixed_vector,generated:$metrics[0].generated,release_reuse:$reuse[0],authority:{repository_writes:0,automatic_commit:0,automatic_push:0,automatic_merge:0,automatic_release:0}}' > "$manifest"
           (cd "$release_dir" && sha256sum "$source_asset" "$evidence_asset" "$report_asset" release-manifest.json > SHA256SUMS)
 
       - name: Create draft release

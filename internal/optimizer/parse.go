@@ -209,7 +209,7 @@ func ValidateContract(contract Contract) error {
 	if strings.Join(contract.Grammar, ",") != "expr-v1,records-v1,quoted-values-v1" {
 		return fmt.Errorf("contract grammar is not the declared grammar")
 	}
-	if strings.Join(contract.Precedence, ",") != "REFUTED,UNKNOWN,CLOSED" {
+	if len(contract.Precedence) != 3 || contract.Precedence[0] != Refuted || contract.Precedence[1] != Unknown || contract.Precedence[2] != Closed {
 		return fmt.Errorf("contract precedence must be REFUTED > UNKNOWN > CLOSED")
 	}
 	if strings.Join(contract.UnknownFields, ",") != "stage,step,reason,unknown_class,next_operation,blocked_by" {

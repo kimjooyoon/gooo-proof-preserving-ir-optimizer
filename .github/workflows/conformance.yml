@@ -155,7 +155,7 @@ jobs:
             --arg conclusion "success" \
             --argjson artifact_id "${{ steps.upload_evidence.outputs.artifact-id }}" \
             --arg artifact_name "gooo-proof-preserving-ir-optimizer-evidence-${{ github.run_id }}" \
-            --arg artifact_digest "${{ steps.upload_evidence.outputs.artifact-digest }}" \
+            --arg artifact_digest "sha256:${{ steps.upload_evidence.outputs.artifact-digest }}" \
             --arg go_version "$(jq -r '.go_version' "$ci_evidence")" \
             --arg runner_digest "$(jq -r '.runner_digest' "$ci_evidence")" \
             --arg toolchain_digest "$(jq -r '.toolchain_digest' "$conformance")" \

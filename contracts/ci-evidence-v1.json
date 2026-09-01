@@ -1,0 +1,65 @@
+{
+  "schema": "gooo-proof-preserving-ir-optimizer/ci-evidence/v1",
+  "verification_authority": "GITHUB_ACTIONS",
+  "numeric_fields_are": "exact-integers",
+  "root_readme_excluded": true,
+  "inventory_fields": [
+    "go_files",
+    "gooo_files",
+    "go_physical_lines",
+    "gooo_physical_lines",
+    "descendant_dirs",
+    "regular_files"
+  ],
+  "generated_fields": ["files", "bytes", "binary_bytes"],
+  "stage_fields": [
+    "compile.wall_ms",
+    "compile.peak_rss_kib",
+    "build.wall_ms",
+    "build.peak_rss_kib",
+    "test.wall_ms",
+    "test.peak_rss_kib",
+    "conformance.wall_ms",
+    "conformance.peak_rss_kib",
+    "integration.wall_ms",
+    "integration.peak_rss_kib"
+  ],
+  "test_fields": [
+    "total",
+    "selected",
+    "executed",
+    "reused",
+    "failed",
+    "unknown"
+  ],
+  "authority": {
+    "repository_writes": 0,
+    "local_test_executions": 0,
+    "local_build_executions": 0,
+    "local_vet_executions": 0,
+    "local_conformance_executions": 0,
+    "local_integration_executions": 0,
+    "cross_project_required_gates": 0,
+    "automatic_commit": 0,
+    "automatic_push": 0,
+    "automatic_merge": 0,
+    "automatic_release": 0
+  },
+  "forbidden_metric_keys": [
+    "score",
+    "percentage",
+    "average",
+    "weighted",
+    "estimate"
+  ],
+  "closed_case_cost_fields": [
+    "before.binary_bytes",
+    "before.generated_bytes",
+    "before.wall_ms",
+    "before.peak_rss_kib",
+    "after.binary_bytes",
+    "after.generated_bytes",
+    "after.wall_ms",
+    "after.peak_rss_kib"
+  ]
+}

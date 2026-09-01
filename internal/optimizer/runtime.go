@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 )
 
 type evalValue struct {
@@ -144,10 +145,7 @@ func GenerateGo(expr *Expr, metadata generatedMetadata) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	anchorsJSON, err := json.Marshal(metadata.ProvenanceAnchors)
-	if err != nil {
-		return nil, err
-	}
+	anchorsLiteral := goStringSlice(metadata.ProvenanceAnchors)
 	return []byte(fmt.Sprintf(`package main
 
 import (
@@ -184,7 +182,18 @@ func main() {
 	}
 	fmt.Println(string(data))
 }
-`, "`json:\"value\"`", "`json:\"terminal_reason\"`", "`json:\"effect\"`", "`json:\"capability\"`", "`json:\"effect_trace\"`", "`json:\"capability_trace\"`", "`json:\"provenance_anchors\"`", valueExpr, metadata.TerminalReason, metadata.Effect, metadata.Capability, anchorsJSON)), nil
+`, "`json:\"value\"`", "`json:\"terminal_reason\"`", "`json:\"effect\"`", "`json:\"capability\"`", "`json:\"effect_trace\"`", "`json:\"capability_trace\"`", "`json:\"provenance_anchors\"`", valueExpr, metadata.TerminalReason, metadata.Effect, metadata.Capability, anchorsLiteral)), nil
+}
+
+func goStringSlice(values []string) string {
+	if len(values) == 0 {
+		return "nil"
+	}
+	literals := make([]string, len(values))
+	for index, value := range values {
+		literals[index] = fmt.Sprintf("%q", value)
+	}
+	return "[]string{" + strings.Join(literals, ",") + "}"
 }
 
 func terminalReasonFromExpr(expr *Expr) string {

@@ -1,0 +1,156 @@
+name: Immutable proof-preserving IR optimizer release
+
+"on":
+  workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: Exact merged main commit to release
+        required: true
+        type: string
+      release_version:
+        description: New unused 0.x.y version; failed versions are never reused
+        required: true
+        default: 0.1.0
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    env:
+      EXPECTED_SHA: ${{ inputs.expected_sha }}
+      RELEASE_VERSION: ${{ inputs.release_version }}
+      GH_TOKEN: ${{ github.token }}
+      IMMUTABLE_RELEASES_API_TOKEN: ${{ secrets.IMMUTABLE_RELEASES_API_TOKEN }}
+    steps:
+      - name: Checkout exact merged commit
+        uses: actions/checkout@v5
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Install Go 1.27
+        uses: actions/setup-go@v6
+        with:
+          go-version: 1.27.0
+          cache: false
+
+      - name: Bind exact merge and confirm immutable releases through user API
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          test "$(go env GOVERSION)" = "go1.27.0"
+          case "$RELEASE_VERSION" in
+            0.*.*) ;;
+            *) echo 'release_version must be 0.x.y' >&2; exit 1 ;;
+          esac
+          test -n "${IMMUTABLE_RELEASES_API_TOKEN:-}"
+          immutable=$(GH_TOKEN="$IMMUTABLE_RELEASES_API_TOKEN" gh api "repos/$GITHUB_REPOSITORY/immutable-releases" --jq '.enabled')
+          test "$immutable" = true
+          RELEASE_TAG="v$RELEASE_VERSION"
+          echo "RELEASE_TAG=$RELEASE_TAG" >> "$GITHUB_ENV"
+          echo "EVIDENCE_ROOT=$RUNNER_TEMP/gooo-proof-preserving-ir-optimizer-release" >> "$GITHUB_ENV"
+          if git ls-remote --exit-code --tags origin "refs/tags/$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "refusing to reuse existing tag $RELEASE_TAG" >&2
+            exit 1
+          fi
+          if gh api "repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "refusing to reuse existing release $RELEASE_TAG" >&2
+            exit 1
+          fi
+
+      - name: Re-run semantic audit and exact CI evidence
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p "$EVIDENCE_ROOT/bin" "$EVIDENCE_ROOT/logs"
+          ./scripts/semantic-audit.sh
+          test -z "$(gofmt -l $(git ls-files '*.go'))"
+          ./scripts/measure-command.sh "$EVIDENCE_ROOT/compile.json" compile "$EVIDENCE_ROOT/logs/compile.log" go test -run '^$' ./...
+          ./scripts/measure-command.sh "$EVIDENCE_ROOT/build.json" build "$EVIDENCE_ROOT/logs/build.log" go build -trimpath -o "$EVIDENCE_ROOT/bin/gooo-proof-preserving-ir-optimizer" ./cmd/gooo-proof-preserving-ir-optimizer
+          go vet ./...
+          ./scripts/measure-command.sh "$EVIDENCE_ROOT/test.json" test "$EVIDENCE_ROOT/test.jsonl" go test -json -count=1 ./...
+          ./scripts/measure-command.sh "$EVIDENCE_ROOT/conformance-stage.json" conformance "$EVIDENCE_ROOT/logs/conformance.log" ./scripts/conformance.sh "$GITHUB_WORKSPACE" "$EVIDENCE_ROOT/bin/gooo-proof-preserving-ir-optimizer" "$EVIDENCE_ROOT/conformance"
+          ./scripts/measure-command.sh "$EVIDENCE_ROOT/integration.json" integration "$EVIDENCE_ROOT/logs/integration.log" ./scripts/integration.sh "$EVIDENCE_ROOT/conformance/cases" "$EVIDENCE_ROOT/integration-output"
+          ./scripts/ci-metrics.sh "$GITHUB_WORKSPACE" "$EVIDENCE_ROOT/ci-evidence.json" "$EVIDENCE_ROOT/conformance/cases/conformance.json" "$EVIDENCE_ROOT/compile.json" "$EVIDENCE_ROOT/build.json" "$EVIDENCE_ROOT/test.json" "$EVIDENCE_ROOT/test.jsonl" "$EVIDENCE_ROOT/conformance-stage.json" "$EVIDENCE_ROOT/integration.json"
+          jq -e '.fixed_vector == {total_cases:8,closed:5,unknown:1,refuted:2} and .repository_writes == 0 and ([.exact_pair_vectors[] | .improvement.exact_pair] | all)' "$EVIDENCE_ROOT/ci-evidence.json" >/dev/null
+
+      - name: Create one annotated tag for the exact merge
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git tag -a "$RELEASE_TAG" "$EXPECTED_SHA" -m "gooo-proof-preserving-ir-optimizer $RELEASE_TAG"
+          git push origin "refs/tags/$RELEASE_TAG"
+          tag_ref=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$RELEASE_TAG")
+          test "$(jq -r '.object.type' <<<"$tag_ref")" = tag
+          tag_object_sha=$(jq -r '.object.sha' <<<"$tag_ref")
+          tag_body=$(gh api "repos/$GITHUB_REPOSITORY/git/tags/$tag_object_sha")
+          jq -e --arg expected "$EXPECTED_SHA" '.object.type == "commit" and .object.sha == $expected' <<<"$tag_body" >/dev/null
+          echo "TAG_OBJECT_SHA=$tag_object_sha" >> "$GITHUB_ENV"
+
+      - name: Assemble digest-bound release assets
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          release_dir="$EVIDENCE_ROOT/release"
+          mkdir -p "$release_dir"
+          source_asset="gooo-proof-preserving-ir-optimizer-source-$RELEASE_TAG.tar.gz"
+          evidence_asset="gooo-proof-preserving-ir-optimizer-evidence-$RELEASE_TAG.tar.gz"
+          report_asset="gooo-proof-preserving-ir-optimizer-report-$RELEASE_TAG.json"
+          git archive --format=tar.gz --prefix="gooo-proof-preserving-ir-optimizer-$RELEASE_TAG/" "$EXPECTED_SHA" > "$release_dir/$source_asset"
+          tar -czf "$release_dir/$evidence_asset" -C "$EVIDENCE_ROOT" conformance integration-output ci-evidence.json
+          jq -S -n --arg schema "gooo-proof-preserving-ir-optimizer/release-report/v1" --arg version "$RELEASE_VERSION" --arg tag "$RELEASE_TAG" --arg commit "$EXPECTED_SHA" --arg tag_object "$TAG_OBJECT_SHA" --slurpfile conformance "$EVIDENCE_ROOT/conformance/cases/conformance.json" --slurpfile metrics "$EVIDENCE_ROOT/ci-evidence.json" '{schema:$schema,version:$version,tag:$tag,merge_sha:$commit,annotated_tag_object_sha:$tag_object,immutable_required:true,fixed_vector:$conformance[0].summary,exact_metrics:$metrics[0]}' > "$release_dir/$report_asset"
+          source_digest="sha256:$(sha256sum "$release_dir/$source_asset" | awk '{print $1}')"
+          evidence_digest="sha256:$(sha256sum "$release_dir/$evidence_asset" | awk '{print $1}')"
+          report_digest="sha256:$(sha256sum "$release_dir/$report_asset" | awk '{print $1}')"
+          manifest="$release_dir/release-manifest.json"
+          jq -S -n --arg schema "gooo-proof-preserving-ir-optimizer/release-manifest/v1" --arg version "$RELEASE_VERSION" --arg tag "$RELEASE_TAG" --arg commit "$EXPECTED_SHA" --arg tag_object "$TAG_OBJECT_SHA" --arg source_name "$source_asset" --arg source_digest "$source_digest" --arg evidence_name "$evidence_asset" --arg evidence_digest "$evidence_digest" --arg report_name "$report_asset" --arg report_digest "$report_digest" --slurpfile metrics "$EVIDENCE_ROOT/ci-evidence.json" '{schema:$schema,version:$version,tag:$tag,merge_sha:$commit,annotated_tag_object_sha:$tag_object,immutable:true,assets:[{name:$source_name,digest:$source_digest},{name:$evidence_name,digest:$evidence_digest},{name:$report_name,digest:$report_digest}],fixed_vector:$metrics[0].fixed_vector,authority:{repository_writes:0,automatic_commit:0,automatic_push:0,automatic_merge:0,automatic_release:0}}' > "$manifest"
+          (cd "$release_dir" && sha256sum "$source_asset" "$evidence_asset" "$report_asset" release-manifest.json > SHA256SUMS)
+
+      - name: Create draft release
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          release_json=$(gh api --method POST "repos/$GITHUB_REPOSITORY/releases" -f tag_name="$RELEASE_TAG" -f target_commitish="$EXPECTED_SHA" -f name="gooo-proof-preserving-ir-optimizer $RELEASE_TAG" -f body="Immutable evidence-bound release for merge $EXPECTED_SHA." -F draft=true -F prerelease=false)
+          test "$(jq -r '.draft' <<<"$release_json")" = true
+          echo "RELEASE_ID=$(jq -r '.id' <<<"$release_json")" >> "$GITHUB_ENV"
+
+      - name: Upload draft assets
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          gh release upload "$RELEASE_TAG" \
+            "$EVIDENCE_ROOT/release/gooo-proof-preserving-ir-optimizer-source-$RELEASE_TAG.tar.gz" \
+            "$EVIDENCE_ROOT/release/gooo-proof-preserving-ir-optimizer-evidence-$RELEASE_TAG.tar.gz" \
+            "$EVIDENCE_ROOT/release/gooo-proof-preserving-ir-optimizer-report-$RELEASE_TAG.json" \
+            "$EVIDENCE_ROOT/release/release-manifest.json" \
+            "$EVIDENCE_ROOT/release/SHA256SUMS"
+
+      - name: Publish draft release once
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          published=$(gh api --method PATCH "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" -F draft=false)
+          test "$(jq -r '.draft' <<<"$published")" = false
+
+      - name: Verify public immutable release and all asset digests
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          release_json=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG")
+          jq -e --arg tag "$RELEASE_TAG" --arg commit "$EXPECTED_SHA" --arg tag_object "$TAG_OBJECT_SHA" '.tag_name == $tag and .draft == false and .prerelease == false and .immutable == true and .target_commitish == $commit' <<<"$release_json" >/dev/null
+          for asset_path in "$EVIDENCE_ROOT/release"/gooo-proof-preserving-ir-optimizer-source-*.tar.gz "$EVIDENCE_ROOT/release"/gooo-proof-preserving-ir-optimizer-evidence-*.tar.gz "$EVIDENCE_ROOT/release"/gooo-proof-preserving-ir-optimizer-report-*.json "$EVIDENCE_ROOT/release/release-manifest.json" "$EVIDENCE_ROOT/release/SHA256SUMS"; do
+            name=$(basename "$asset_path")
+            digest="sha256:$(sha256sum "$asset_path" | awk '{print $1}')"
+            actual=$(jq -r --arg name "$name" '.assets[] | select(.name == $name) | .digest' <<<"$release_json")
+            test "$actual" = "$digest"
+          done
+          jq -e --arg commit "$EXPECTED_SHA" --arg tag_object "$TAG_OBJECT_SHA" '.merge_sha == $commit and .annotated_tag_object_sha == $tag_object and .immutable == true' "$EVIDENCE_ROOT/release/release-manifest.json" >/dev/null
+          cat "$EVIDENCE_ROOT/release/release-manifest.json" >> "$GITHUB_STEP_SUMMARY"
+          echo "release_url=$(jq -r '.html_url' <<<"$release_json")" >> "$GITHUB_STEP_SUMMARY"

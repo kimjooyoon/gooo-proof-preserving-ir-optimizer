@@ -1,0 +1,134 @@
+name: Proof-preserving IR optimizer conformance
+
+"on":
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: gooo-proof-preserving-ir-optimizer-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    env:
+      SUBJECT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout exact subject
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ env.SUBJECT_SHA }}
+          fetch-depth: 0
+
+      - name: Install Go 1.27
+        uses: actions/setup-go@v6
+        with:
+          go-version: 1.27.0
+          cache: false
+
+      - name: Establish CI evidence root
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test "$(go env GOVERSION)" = "go1.27.0"
+          test "$(go env GOOS)" = "linux"
+          test "$(go env GOARCH)" = "amd64"
+          echo "EVIDENCE_ROOT=$RUNNER_TEMP/gooo-proof-preserving-ir-optimizer" >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/gooo-proof-preserving-ir-optimizer/bin" "$RUNNER_TEMP/gooo-proof-preserving-ir-optimizer/logs"
+
+      - name: Semantic audit of the declared boundary
+        run: ./scripts/semantic-audit.sh
+
+      - name: Verify Go formatting
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          files=$(git ls-files '*.go')
+          test -z "$(gofmt -l $files)"
+
+      - name: Measure compile stage
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ./scripts/measure-command.sh "$EVIDENCE_ROOT/compile.json" compile "$EVIDENCE_ROOT/logs/compile.log" \
+            go test -run '^$' ./...
+
+      - name: Measure build stage
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ./scripts/measure-command.sh "$EVIDENCE_ROOT/build.json" build "$EVIDENCE_ROOT/logs/build.log" \
+            go build -trimpath -o "$EVIDENCE_ROOT/bin/gooo-proof-preserving-ir-optimizer" ./cmd/gooo-proof-preserving-ir-optimizer
+
+      - name: Run Go vet
+        run: go vet ./...
+
+      - name: Measure test stage
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ./scripts/measure-command.sh "$EVIDENCE_ROOT/test.json" test "$EVIDENCE_ROOT/test.jsonl" \
+            go test -json -count=1 ./...
+
+      - name: Measure fixed conformance stage
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ./scripts/measure-command.sh "$EVIDENCE_ROOT/conformance-stage.json" conformance "$EVIDENCE_ROOT/logs/conformance.log" \
+            ./scripts/conformance.sh "$GITHUB_WORKSPACE" "$EVIDENCE_ROOT/bin/gooo-proof-preserving-ir-optimizer" "$EVIDENCE_ROOT/conformance"
+
+      - name: Measure generated artifact integration stage
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ./scripts/measure-command.sh "$EVIDENCE_ROOT/integration.json" integration "$EVIDENCE_ROOT/logs/integration.log" \
+            ./scripts/integration.sh "$EVIDENCE_ROOT/conformance/cases" "$EVIDENCE_ROOT/integration-output"
+
+      - name: Write and fail-closed-check exact CI evidence
+        if: always()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test -f "$EVIDENCE_ROOT/conformance/cases/conformance.json"
+          ./scripts/ci-metrics.sh "$GITHUB_WORKSPACE" "$EVIDENCE_ROOT/ci-evidence.json" \
+            "$EVIDENCE_ROOT/conformance/cases/conformance.json" "$EVIDENCE_ROOT/compile.json" \
+            "$EVIDENCE_ROOT/build.json" "$EVIDENCE_ROOT/test.json" "$EVIDENCE_ROOT/test.jsonl" \
+            "$EVIDENCE_ROOT/conformance-stage.json" "$EVIDENCE_ROOT/integration.json"
+          jq -e '
+            .schema == "gooo-proof-preserving-ir-optimizer/ci-evidence/v1" and
+            .verification_authority == "GITHUB_ACTIONS" and
+            .repository_writes == 0 and .root_readme_excluded == true and
+            ([.inventory.go_files,.inventory.gooo_files,.inventory.go_physical_lines,.inventory.gooo_physical_lines,.inventory.descendant_dirs,.inventory.regular_files,.generated.files,.generated.bytes,.generated.binary_bytes] | all(type=="number" and floor==.)) and
+            ([.stages[] | (.wall_ms|type)=="number" and (.wall_ms|floor)==. and (.peak_rss_kib|type)=="number" and (.peak_rss_kib|floor)==.] | all) and
+            ([.tests.total,.tests.selected,.tests.executed,.tests.reused,.tests.failed,.tests.unknown] | all(type=="number" and floor==.)) and
+            .tests.selected == .tests.total and .tests.executed + .tests.failed == .tests.total and .tests.reused == 0 and .tests.unknown == 0 and
+            .fixed_vector == {total_cases:8,closed:5,unknown:1,refuted:2} and
+            .authority.repository_writes == 0 and .authority.local_test_executions == 0 and .authority.local_build_executions == 0 and
+            .authority.local_vet_executions == 0 and .authority.local_conformance_executions == 0 and .authority.local_integration_executions == 0 and
+            .authority.cross_project_required_gates == 0 and
+            ([.exact_pair_vectors[] | .improvement.exact_pair] | all) and
+            ([.. | objects | keys[]? | select(test("score|percentage|average|weighted|estimate"; "i"))] | length) == 0
+          ' "$EVIDENCE_ROOT/ci-evidence.json" >/dev/null
+
+      - name: Publish exact summary
+        if: always()
+        shell: bash
+        run: |
+          if [[ -f "$EVIDENCE_ROOT/ci-evidence.json" ]]; then
+            jq -r '"decision=\(.fixed_vector) generated_go_files=\(.generated.files) generated_go_bytes=\(.generated.bytes)"' "$EVIDENCE_ROOT/ci-evidence.json" >> "$GITHUB_STEP_SUMMARY"
+            cat "$EVIDENCE_ROOT/conformance/cases/conformance.md" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload exact machine evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gooo-proof-preserving-ir-optimizer-evidence-${{ github.run_id }}
+          path: ${{ runner.temp }}/gooo-proof-preserving-ir-optimizer
+          if-no-files-found: error

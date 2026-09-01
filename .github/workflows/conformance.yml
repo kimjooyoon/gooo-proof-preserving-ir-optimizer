@@ -127,8 +127,56 @@ jobs:
 
       - name: Upload exact machine evidence
         if: always()
+        id: upload_evidence
         uses: actions/upload-artifact@v4
         with:
           name: gooo-proof-preserving-ir-optimizer-evidence-${{ github.run_id }}
           path: ${{ runner.temp }}/gooo-proof-preserving-ir-optimizer
+          if-no-files-found: error
+
+      - name: Write proof artifact manifest
+        if: success()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          conformance="$EVIDENCE_ROOT/conformance/cases/conformance.json"
+          ci_evidence="$EVIDENCE_ROOT/ci-evidence.json"
+          test -f "$conformance" -a -f "$ci_evidence"
+          jq -S -n \
+            --arg schema "gooo-proof-preserving-ir-optimizer/ci-proof-manifest/v1" \
+            --arg repository "$GITHUB_REPOSITORY" \
+            --arg workflow "$GITHUB_WORKFLOW" \
+            --arg workflow_file ".github/workflows/conformance.yml" \
+            --arg event "$GITHUB_EVENT_NAME" \
+            --arg ref "$GITHUB_REF" \
+            --arg sha "$GITHUB_SHA" \
+            --argjson run_id "$GITHUB_RUN_ID" \
+            --argjson run_attempt "$GITHUB_RUN_ATTEMPT" \
+            --arg conclusion "success" \
+            --argjson artifact_id "${{ steps.upload_evidence.outputs.artifact-id }}" \
+            --arg artifact_name "gooo-proof-preserving-ir-optimizer-evidence-${{ github.run_id }}" \
+            --arg artifact_digest "${{ steps.upload_evidence.outputs.artifact-digest }}" \
+            --arg go_version "$(jq -r '.go_version' "$ci_evidence")" \
+            --arg runner_digest "$(jq -r '.runner_digest' "$ci_evidence")" \
+            --arg toolchain_digest "$(jq -r '.toolchain_digest' "$conformance")" \
+            --arg contract_path ".gooo/proof-preserving-ir-optimizer.gooo" \
+            --arg contract_digest "$(jq -r '.contract_digest' "$conformance")" \
+            --arg source_path ".gooo/proof-preserving-ir-optimizer.gooo" \
+            --arg source_digest "$(jq -r '.source_digest' "$conformance")" \
+            --arg ci_evidence_digest "sha256:$(sha256sum "$ci_evidence" | awk '{print $1}')" \
+            --slurpfile evidence "$ci_evidence" \
+            '{schema:$schema,repository:$repository,workflow:$workflow,workflow_file:$workflow_file,event:$event,ref:$ref,head_sha:$sha,run_id:$run_id,run_attempt:$run_attempt,conclusion:$conclusion,
+              artifact:{id:$artifact_id,name:$artifact_name,digest:$artifact_digest},
+              manifest:{path:"proof-manifest.json",schema:$schema},
+              toolchain:{go_version:$go_version,digest:$toolchain_digest,runner_digest:$runner_digest},
+              contract:{path:$contract_path,digest:$contract_digest},source:{path:$source_path,digest:$source_digest},
+              ci_evidence_digest:$ci_evidence_digest,fixed_vector:$evidence[0].fixed_vector,generated:$evidence[0].generated}' \
+            > "$EVIDENCE_ROOT/proof-manifest.json"
+
+      - name: Upload proof artifact manifest
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gooo-proof-preserving-ir-optimizer-proof-manifest-${{ github.run_id }}
+          path: ${{ runner.temp }}/gooo-proof-preserving-ir-optimizer/proof-manifest.json
           if-no-files-found: error

@@ -1,0 +1,58 @@
+{
+  "schema": "gooo-proof-preserving-ir-optimizer/release-reuse/v1",
+  "fixed_vector": {
+    "total_cases": 8,
+    "closed": 5,
+    "unknown": 1,
+    "refuted": 2
+  },
+  "generated": {
+    "files": 16,
+    "bytes": 19032,
+    "binary_bytes": 62154194
+  },
+  "duplicate_release_baseline": {
+    "release_version": "0.1.0",
+    "workflow_run_id": 33485925676,
+    "tests": {
+      "executed": 2,
+      "reused": 0
+    },
+    "conformance": {
+      "executed": 1,
+      "reused": 0,
+      "wall_ms": 86912,
+      "peak_rss_kib": 276620
+    },
+    "integration": {
+      "executed": 1,
+      "reused": 0,
+      "wall_ms": 82081,
+      "peak_rss_kib": 283256
+    },
+    "expensive_executions": 2
+  },
+  "duplicate_release_target": {
+    "tests": {
+      "executed": 0,
+      "reused": 2
+    },
+    "conformance": {
+      "executed": 0,
+      "reused": 1
+    },
+    "integration": {
+      "executed": 0,
+      "reused": 1
+    },
+    "expensive_executions": 0,
+    "decision": "CLOSED",
+    "reason": "EXACT_STRUCTURAL_DUPLICATE_EXECUTION_COUNT_PAIR"
+  },
+  "physical_runner_comparison": {
+    "decision": "UNKNOWN",
+    "reason": "HOSTED_RUNNER_IDENTITY_NOT_PROVEN",
+    "wall_ms": "UNKNOWN",
+    "peak_rss_kib": "UNKNOWN"
+  }
+}

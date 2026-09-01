@@ -59,3 +59,20 @@ The protocol is fail-closed and resolves evidence as
 `REFUTED > UNKNOWN > CLOSED`. Every UNKNOWN record carries the six fields
 declared by the `.gooo` source: `stage`, `step`, `reason`, `unknown_class`,
 `next_operation`, and `blocked_by`.
+
+## Release proof reuse
+
+The main-branch CI workflow uploads an evidence artifact and a separate proof
+manifest. The manifest binds the artifact ID, name, and digest to the exact
+repository, workflow, event, head SHA, run attempt, conclusion, Go toolchain,
+contract digest, source digest, fixed vector, and generated metrics. The release
+workflow verifies both artifact archives and the manifest through the standard
+`GITHUB_TOKEN`, then reuses the proof without rerunning tests, conformance, or
+generated-artifact integration.
+
+For the v0.1.1 reuse comparison, the prior v0.1.0 release workflow executed
+two expensive stages (`conformance=1`, `integration=1`); the new release
+executes neither and records `conformance=0/reused=1` and
+`integration=0/reused=1`. This exact structural count pair is CLOSED. Wall-time
+and RSS improvement is UNKNOWN because GitHub-hosted physical runner identity
+is not proven equal across releases.

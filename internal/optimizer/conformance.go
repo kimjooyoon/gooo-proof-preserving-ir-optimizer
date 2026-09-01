@@ -306,15 +306,15 @@ func buildAndRun(caseDir, variant string, expr *Expr, metadata generatedMetadata
 		return VariantEvidence{}, err
 	}
 	moduleName := "generated." + strings.ReplaceAll(filepath.Base(caseDir), "-", ".") + "." + variant
-	if err := os.WriteFile(filepath.Join(variantDir, "go.mod"), []byte("module "+moduleName+"\n\ngo 1.27.0\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(generatedDir, "go.mod"), []byte("module "+moduleName+"\n\ngo 1.27.0\n"), 0o644); err != nil {
 		return VariantEvidence{}, err
 	}
-	binaryPath := filepath.Join(variantDir, "program")
-	build, err := measuredCommand(variantDir, binaryPath, "go", "build", "-trimpath", "-o", binaryPath, ".")
+	binaryPath := filepath.Join(generatedDir, "program")
+	build, err := measuredCommand(generatedDir, binaryPath, "go", "build", "-trimpath", "-o", binaryPath, ".")
 	if err != nil {
 		return VariantEvidence{}, fmt.Errorf("go build: %w", err)
 	}
-	run, err := measuredCommand(variantDir, binaryPath, binaryPath)
+	run, err := measuredCommand(generatedDir, binaryPath, binaryPath)
 	if err != nil {
 		return VariantEvidence{}, fmt.Errorf("generated program: %w", err)
 	}

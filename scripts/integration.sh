@@ -23,6 +23,6 @@ while IFS= read -r -d '' source; do
   output=$("$target/program")
   jq -e '.value|type == "number"' <<<"$output" >/dev/null
   count=$((count + 1))
-done < <(find "$cases" -type f -path '*/generated/main.go' -print0 | sort -z)
+done < <(find "$cases" -type f \( -path '*/before/generated/main.go' -o -path '*/after/generated/main.go' \) -print0 | sort -z)
 test "$count" -eq 16
 jq -n --argjson generated_cases "$count" '{schema:"gooo-proof-preserving-ir-optimizer/integration/v1",generated_cases:$generated_cases,decision:"CLOSED"}' > "$output_root/integration.json"

@@ -193,6 +193,22 @@ func deadBranch(expr *Expr) (*Expr, []RewriteRecord, error) {
 		expr.Args[index] = optimized
 		records = append(records, childRecords...)
 	}
+	if expr.ValueExpr != nil {
+		optimized, childRecords, err := deadBranch(expr.ValueExpr)
+		if err != nil {
+			return nil, nil, err
+		}
+		expr.ValueExpr = optimized
+		records = append(records, childRecords...)
+	}
+	if expr.BodyExpr != nil {
+		optimized, childRecords, err := deadBranch(expr.BodyExpr)
+		if err != nil {
+			return nil, nil, err
+		}
+		expr.BodyExpr = optimized
+		records = append(records, childRecords...)
+	}
 	if expr.Kind == "if" && len(expr.Args) == 3 && expr.Args[0].Kind == "const-bool" {
 		discarded := expr.Args[2]
 		selected := expr.Args[1]

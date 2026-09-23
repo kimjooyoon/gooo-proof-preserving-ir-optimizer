@@ -36,3 +36,34 @@ func TestConstantFoldPreservesSourceAnchors(t *testing.T) {
 		t.Fatalf("origin anchors changed: before=%v after=%v", collectAllAnchors(expr), collectAllAnchors(optimized))
 	}
 }
+
+func TestDeadBranchRecursesThroughLetExpressions(t *testing.T) {
+	expr := &Expr{
+		Kind: "let",
+		Name: "x",
+		ValueExpr: &Expr{Kind: "if", Args: []*Expr{
+			{Kind: "const-bool", BoolValue: true},
+			{Kind: "const-int", IntValue: 1},
+			{Kind: "const-int", IntValue: 2},
+		}},
+		BodyExpr: &Expr{Kind: "if", Args: []*Expr{
+			{Kind: "const-bool", BoolValue: false},
+			{Kind: "var", Name: "x"},
+			{Kind: "const-int", IntValue: 3},
+		}},
+	}
+
+	optimized, records, err := Optimize(expr, "dead-branch")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if optimized.ValueExpr == nil || optimized.ValueExpr.Kind != "const-int" || optimized.ValueExpr.IntValue != 1 {
+		t.Fatalf("dead branch was not removed from let value: %+v", optimized.ValueExpr)
+	}
+	if optimized.BodyExpr == nil || optimized.BodyExpr.Kind != "const-int" || optimized.BodyExpr.IntValue != 3 {
+		t.Fatalf("dead branch was not removed from let body: %+v", optimized.BodyExpr)
+	}
+	if len(records) != 2 {
+		t.Fatalf("rewrite record count = %d, want 2", len(records))
+	}
+}

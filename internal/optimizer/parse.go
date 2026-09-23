@@ -346,6 +346,9 @@ func (p *expressionParser) parse() (*Expr, error) {
 		if literal == "" {
 			return nil, fmt.Errorf("const literal is empty")
 		}
+		if p.pos >= len(p.text) || p.text[p.pos] != ')' {
+			return nil, fmt.Errorf("const is missing closing parenthesis")
+		}
 		if literal == "true" || literal == "false" {
 			p.pos++
 			return &Expr{Kind: "const-bool", Type: "Bool", Effect: "PURE", Capability: "NONE", BoolValue: literal == "true", HasBool: true}, nil
@@ -360,6 +363,9 @@ func (p *expressionParser) parse() (*Expr, error) {
 		name := p.until(')')
 		if name == "" {
 			return nil, fmt.Errorf("var name is empty")
+		}
+		if p.pos >= len(p.text) || p.text[p.pos] != ')' {
+			return nil, fmt.Errorf("var is missing closing parenthesis")
 		}
 		p.pos++
 		return &Expr{Kind: "var", Name: name, Type: "Int", Effect: "PURE", Capability: "NONE"}, nil

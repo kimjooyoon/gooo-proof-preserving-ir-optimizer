@@ -36,3 +36,9 @@ func TestConstantFoldPreservesSourceAnchors(t *testing.T) {
 		t.Fatalf("origin anchors changed: before=%v after=%v", collectAllAnchors(expr), collectAllAnchors(optimized))
 	}
 }
+
+func TestPairsAfterRejectsDuplicateKeysAfterEmptyValue(t *testing.T) {
+	if _, err := pairsAfter([]string{"origin", "", "origin", "replacement"}, 0); err == nil {
+		t.Fatal("duplicate key after an empty value was accepted")
+	}
+}

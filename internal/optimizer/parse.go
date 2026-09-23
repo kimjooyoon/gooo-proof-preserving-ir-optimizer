@@ -532,10 +532,15 @@ func pairsAfter(tokens []string, start int) (map[string]string, error) {
 		return nil, fmt.Errorf("expected key/value pairs")
 	}
 	pairs := make(map[string]string, len(tokens[start:])/2)
+	seen := make(map[string]struct{}, len(tokens[start:])/2)
 	for index := start; index < len(tokens); index += 2 {
-		if pairs[tokens[index]] != "" || tokens[index] == "" {
+		if tokens[index] == "" {
 			return nil, fmt.Errorf("duplicate or malformed key %q", tokens[index])
 		}
+		if _, exists := seen[tokens[index]]; exists {
+			return nil, fmt.Errorf("duplicate or malformed key %q", tokens[index])
+		}
+		seen[tokens[index]] = struct{}{}
 		pairs[tokens[index]] = tokens[index+1]
 	}
 	return pairs, nil

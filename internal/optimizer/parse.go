@@ -63,16 +63,22 @@ func ParseContract(text string) (Contract, error) {
 		}
 		switch tokens[0] {
 		case "authority":
-			if err := markSingleton("authority"); err != nil { return Contract{}, err }
+			if err := markSingleton("authority"); err != nil {
+				return Contract{}, err
+			}
 			if len(tokens) != 2 {
 				return Contract{}, fmt.Errorf("line %d: authority requires one value", lineNo)
 			}
 			contract.Authority = tokens[1]
 		case "grammar":
-			if err := markSingleton("grammar"); err != nil { return Contract{}, err }
+			if err := markSingleton("grammar"); err != nil {
+				return Contract{}, err
+			}
 			contract.Grammar = append([]string(nil), tokens[1:]...)
 		case "version", "language":
-			if err := markSingleton(tokens[0]); err != nil { return Contract{}, err }
+			if err := markSingleton(tokens[0]); err != nil {
+				return Contract{}, err
+			}
 			if len(tokens) != 2 {
 				return Contract{}, fmt.Errorf("line %d: %s requires one value", lineNo, tokens[0])
 			}
@@ -82,16 +88,22 @@ func ParseContract(text string) (Contract, error) {
 				contract.Language = tokens[1]
 			}
 		case "precedence":
-			if err := markSingleton("precedence"); err != nil { return Contract{}, err }
+			if err := markSingleton("precedence"); err != nil {
+				return Contract{}, err
+			}
 			contract.Precedence = make([]Decision, 0, len(tokens)-1)
 			for _, token := range tokens[1:] {
 				contract.Precedence = append(contract.Precedence, Decision(token))
 			}
 		case "unknown_fields":
-			if err := markSingleton("unknown_fields"); err != nil { return Contract{}, err }
+			if err := markSingleton("unknown_fields"); err != nil {
+				return Contract{}, err
+			}
 			contract.UnknownFields = append([]string(nil), tokens[1:]...)
 		case "denominator":
-			if err := markSingleton("denominator"); err != nil { return Contract{}, err }
+			if err := markSingleton("denominator"); err != nil {
+				return Contract{}, err
+			}
 			if len(tokens) != 4 || tokens[2] != "count" {
 				return Contract{}, fmt.Errorf("line %d: malformed denominator", lineNo)
 			}
@@ -101,7 +113,9 @@ func ParseContract(text string) (Contract, error) {
 			}
 			contract.DenominatorID, contract.DenominatorCount = tokens[1], count
 		case "normalization":
-			if err := markSingleton("normalization"); err != nil { return Contract{}, err }
+			if err := markSingleton("normalization"); err != nil {
+				return Contract{}, err
+			}
 			pairs, err := pairsAfter(tokens, 1)
 			if err != nil {
 				return Contract{}, fmt.Errorf("line %d: %w", lineNo, err)
@@ -156,14 +170,18 @@ func ParseContract(text string) (Contract, error) {
 			}
 			contract.ProofObligations = append(contract.ProofObligations, ProofObligation{ID: tokens[1], Stage: pairs["stage"], Step: pairs["step"], Proof: pairs["proof"], Missing: pairs["missing"]})
 		case "cost_observation":
-			if err := markSingleton("cost_observation"); err != nil { return Contract{}, err }
+			if err := markSingleton("cost_observation"); err != nil {
+				return Contract{}, err
+			}
 			pairs, err := pairsAfter(tokens, 1)
 			if err != nil {
 				return Contract{}, fmt.Errorf("line %d: %w", lineNo, err)
 			}
 			contract.Cost = CostPolicy{Vector: pairs["vector"], Pair: pairs["pair"], Policy: pairs["policy"]}
 		case "authority_rule":
-			if err := markSingleton("authority_rule"); err != nil { return Contract{}, err }
+			if err := markSingleton("authority_rule"); err != nil {
+				return Contract{}, err
+			}
 			pairs, err := pairsAfter(tokens, 1)
 			if err != nil {
 				return Contract{}, fmt.Errorf("line %d: %w", lineNo, err)

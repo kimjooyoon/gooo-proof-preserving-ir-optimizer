@@ -9,3 +9,11 @@ func TestParseExprRejectsUnclosedLeafExpressions(t *testing.T) {
 		}
 	}
 }
+
+func TestParseExprRejectsMalformedVariableNames(t *testing.T) {
+	for _, input := range []string{"var(x y)", "var(x,y)", "var()"} {
+		if _, err := parseExpr(input); err == nil {
+			t.Fatalf("parseExpr(%q) accepted a malformed variable name", input)
+		}
+	}
+}

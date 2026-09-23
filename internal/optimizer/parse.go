@@ -360,7 +360,7 @@ func (p *expressionParser) parse() (*Expr, error) {
 		p.pos++
 		return &Expr{Kind: "const-int", Type: "Int", Effect: "PURE", Capability: "NONE", IntValue: value}, nil
 	case "var":
-		name := p.until(')')
+		name := p.identifier()
 		if name == "" {
 			return nil, fmt.Errorf("var name is empty")
 		}

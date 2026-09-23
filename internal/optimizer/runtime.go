@@ -186,19 +186,8 @@ func main() {
 }
 
 func renderTopLevelInt(expr *Expr) (string, string, error) {
-	if expr.Kind != "let" {
-		value, err := renderInt(expr, map[string]string{})
-		return "", value, err
-	}
-	value, err := renderInt(expr.ValueExpr, map[string]string{})
-	if err != nil {
-		return "", "", err
-	}
-	body, err := renderInt(expr.BodyExpr, map[string]string{expr.Name: expr.Name})
-	if err != nil {
-		return "", "", err
-	}
-	return fmt.Sprintf("%s := int64(%s)\n\t", expr.Name, value), body, nil
+	value, err := renderInt(expr, map[string]string{})
+	return "", value, err
 }
 
 func goStringSlice(values []string) string {

@@ -129,6 +129,16 @@ func GenerateGo(expr *Expr, metadata generatedMetadata) ([]byte, error) {
 	if err := DeriveMetadata(expr); err != nil {
 		return nil, err
 	}
+	if metadata.Effect != "" && metadata.Effect != expr.Effect {
+		return nil, fmt.Errorf("generated metadata effect %q disagrees with derived IR effect %q", metadata.Effect, expr.Effect)
+	}
+	if metadata.Capability != "" && metadata.Capability != expr.Capability {
+		return nil, fmt.Errorf("generated metadata capability %q disagrees with derived IR capability %q", metadata.Capability, expr.Capability)
+	}
+	derivedTerminalReason := terminalReasonFromExpr(expr)
+	if metadata.TerminalReason != "" && metadata.TerminalReason != derivedTerminalReason {
+		return nil, fmt.Errorf("generated metadata terminal reason %q disagrees with derived IR terminal reason %q", metadata.TerminalReason, derivedTerminalReason)
+	}
 	if metadata.Effect == "" {
 		metadata.Effect = expr.Effect
 	}

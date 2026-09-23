@@ -67,3 +67,17 @@ func TestDeadBranchRecursesThroughLetExpressions(t *testing.T) {
 		t.Fatalf("rewrite record count = %d, want 2", len(records))
 	}
 }
+
+func TestGenerateGoRejectsInconsistentDerivedMetadata(t *testing.T) {
+	expr := &Expr{Kind: "const-int", IntValue: 7}
+
+	if _, err := GenerateGo(expr, generatedMetadata{Effect: "IO"}); err == nil {
+		t.Fatal("expected inconsistent effect metadata to be rejected")
+	}
+	if _, err := GenerateGo(expr, generatedMetadata{Capability: "filesystem"}); err == nil {
+		t.Fatal("expected inconsistent capability metadata to be rejected")
+	}
+	if _, err := GenerateGo(expr, generatedMetadata{TerminalReason: "panic"}); err == nil {
+		t.Fatal("expected inconsistent terminal metadata to be rejected")
+	}
+}
